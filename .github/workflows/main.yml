@@ -1,0 +1,18 @@
+name: Build example
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release"
+        required: true
+        default: false
+        type: boolean
+jobs:
+  download-upload:
+      runs-on: ubuntu-latest
+      steps:
+      - name: Checkout repository
+        run: chmod 777 build.sh
+              ./build.sh
