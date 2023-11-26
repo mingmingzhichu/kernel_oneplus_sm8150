@@ -15,6 +15,7 @@ jobs:
       steps:
       - name: Checkout repository
         run: |
+         git clone https://github.com/mingmingzhichu/kernel_oneplus_sm8150
          cd kernel_oneplus_sm8150
          chmod 777 build.sh
          ./build.sh
