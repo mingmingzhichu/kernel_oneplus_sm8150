@@ -14,6 +14,7 @@ jobs:
       runs-on: ubuntu-latest
       steps:
       - name: Checkout repository
-        run: cd kernel_oneplus_sm8150
-            chmod 777 build.sh
-            ./build.sh
+        run: |
+         cd kernel_oneplus_sm8150
+         chmod 777 build.sh
+         ./build.sh
