@@ -32,34 +32,41 @@
 MODULE_IMPORT_NS("DMA_BUF");
 #endif
 
+static int evdi_pin_pages(struct evdi_gem_object *obj);
+static void evdi_unpin_pages(struct evdi_gem_object *obj);
+static void evdi_gem_vm_open(struct vm_area_struct *vma)
+{
+	struct evdi_gem_object *obj = to_evdi_bo(vma->vm_private_data);
+	drm_gem_vm_open(vma);
+	evdi_pin_pages(obj);
+}
+
+static void evdi_gem_vm_close(struct vm_area_struct *vma)
+{
+	struct evdi_gem_object *obj = to_evdi_bo(vma->vm_private_data);
+	evdi_unpin_pages(obj);
+	drm_gem_vm_close(vma);
+}
+
+static const struct vm_operations_struct evdi_gem_vm_ops = {
+	.fault	= evdi_gem_fault,
+	.open	= evdi_gem_vm_open,
+	.close	= evdi_gem_vm_close,
+};
+
 #if KERNEL_VERSION(5, 11, 0) <= LINUX_VERSION_CODE || defined(EL8)
 static int evdi_prime_pin(struct drm_gem_object *obj);
 static void evdi_prime_unpin(struct drm_gem_object *obj);
 
-static const struct vm_operations_struct evdi_gem_vm_ops = {
-	.fault = evdi_gem_fault,
-	.open = drm_gem_vm_open,
-	.close = drm_gem_vm_close,
-};
-
 static struct drm_gem_object_funcs gem_obj_funcs = {
-	.free = evdi_gem_free_object,
-	.pin = evdi_prime_pin,
-	.unpin = evdi_prime_unpin,
-	.vm_ops = &evdi_gem_vm_ops,
-	.export = drm_gem_prime_export,
-	.get_sg_table = evdi_prime_get_sg_table,
+	.free		= evdi_gem_free_object,
+	.pin		= evdi_prime_pin,
+	.unpin		= evdi_prime_unpin,
+	.vm_ops		= &evdi_gem_vm_ops,
+	.export		= drm_gem_prime_export,
+	.get_sg_table	= evdi_prime_get_sg_table,
 };
 #endif
-
-static bool evdi_was_called_by_mutter(void)
-{
-	char task_comm[TASK_COMM_LEN] = { 0 };
-
-	get_task_comm(task_comm, current);
-
-	return strcmp(task_comm, "gnome-shell") == 0;
-}
 
 static bool evdi_drm_gem_object_use_import_attach(struct drm_gem_object *obj)
 {
@@ -196,6 +203,9 @@ int evdi_drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 #else
 	vma->vm_flags &= ~VM_PFNMAP;
 	vma->vm_flags |= VM_MIXEDMAP;
+#endif
+#if KERNEL_VERSION(5, 11, 0) > LINUX_VERSION_CODE
+	vma->vm_ops = &evdi_gem_vm_ops;
 #endif
 
 	return ret;
@@ -405,10 +415,6 @@ int evdi_gem_mmap(struct drm_file *file,
 	}
 	gobj = to_evdi_bo(obj);
 
-	ret = evdi_pin_pages(gobj);
-	if (ret)
-		goto out;
-
 	/* Don't allow imported objects to be mapped */
 	if (obj->import_attach) {
 #if defined(CONFIG_MODULES)
@@ -447,11 +453,9 @@ evdi_prime_import_sg_table(struct drm_device *dev,
 {
 	struct evdi_gem_object *obj;
 	int npages;
-	bool called_by_mutter;
 
 	EVDI_INFO("evdi_prime_import_sg_table");
 	print_dma_buf_owner(attach->dmabuf);
-	called_by_mutter = evdi_was_called_by_mutter();
 
 	obj = evdi_gem_alloc_object(dev, attach->dmabuf->size);
 	if (IS_ERR(obj))
