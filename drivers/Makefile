@@ -198,3 +198,5 @@ obj-$(CONFIG_AW8697_HAPTIC) += vibrator/
 # GNSS driver
 obj-$(CONFIG_GNSS_SIRF)		+= gnsssirf/
 obj-$(CONFIG_GNSS)		+= gnss/
+# Lindroid DRM loopback
+obj-$(CONFIG_DRM_LINDROID_EVDI)	+= lindroid-drm-loopback/
