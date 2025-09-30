@@ -63,10 +63,17 @@ static bool evdi_was_called_by_mutter(void)
 
 static bool evdi_drm_gem_object_use_import_attach(struct drm_gem_object *obj)
 {
-	if (!obj || !obj->import_attach || !obj->import_attach->dmabuf->owner)
+	if (!obj || !obj->import_attach || !obj->import_attach->dmabuf)
 		return false;
 
-	return strcmp(obj->import_attach->dmabuf->owner->name, "amdgpu") != 0;
+#if defined(CONFIG_MODULES)
+	if (!obj->import_attach->dmabuf->owner)
+		return false;
+
+	return strcmp(module_name(obj->import_attach->dmabuf->owner), "amdgpu") != 0;
+#else
+	return true;
+#endif
 }
 
 uint32_t evdi_gem_object_handle_lookup(struct drm_file *filp,
@@ -404,7 +411,9 @@ int evdi_gem_mmap(struct drm_file *file,
 
 	/* Don't allow imported objects to be mapped */
 	if (obj->import_attach) {
+#if defined(CONFIG_MODULES)
 		EVDI_WARN("Don't allow imported objects to be mapped: owner: %s",  obj->import_attach->dmabuf->owner->name);
+#endif
 		ret = -EINVAL;
 		goto out;
 	}

@@ -103,13 +103,11 @@ static int evdi_user_framebuffer_dirty(
 {
 	struct evdi_framebuffer *efb = to_evdi_fb(fb);
 	struct drm_device *dev = efb->base.dev;
-	struct evdi_device *evdi = dev->dev_private;
 
 	struct drm_modeset_acquire_ctx ctx;
 	struct drm_atomic_state *state;
 	struct drm_plane *plane;
 	int ret = 0;
-	unsigned int i;
 
 	EVDI_CHECKPT();
 

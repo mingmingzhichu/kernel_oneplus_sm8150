@@ -1137,8 +1137,8 @@ int evdi_poll_ioctl(struct drm_device *drm_dev, void *data,
 static void evdi_cancel_events_for_file(struct evdi_device *evdi,
                                         struct drm_file *file)
 {
-	EVDI_INFO("Going to drain events\n");
 	struct evdi_event *event, *tmp;
+	EVDI_INFO("Going to drain events\n");
 	spin_lock(&evdi->event_lock);
 
 	list_for_each_entry_safe(event, tmp, &evdi->event_queue, list) {
