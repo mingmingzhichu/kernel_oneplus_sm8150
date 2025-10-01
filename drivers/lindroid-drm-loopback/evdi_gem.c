@@ -281,7 +281,7 @@ static void evdi_gem_put_pages(struct evdi_gem_object *obj)
 		return;
 	}
 
-	drm_gem_put_pages(&obj->base, obj->pages, false, false);
+	drm_gem_put_pages(&obj->base, obj->pages, false, true);
 	obj->pages = NULL;
 }
 
