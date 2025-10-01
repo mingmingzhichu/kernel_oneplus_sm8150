@@ -115,7 +115,7 @@ struct evdi_gem_object *evdi_gem_alloc_object(struct drm_device *dev,
 		kfree(obj);
 		return NULL;
 	}
-
+	atomic_set(&obj->pages_pin_count, 0);
 
 #if KERNEL_VERSION(5, 11, 0) <= LINUX_VERSION_CODE || defined(EL8)
 	obj->base.funcs = &gem_obj_funcs;
@@ -289,11 +289,17 @@ static int evdi_pin_pages(struct evdi_gem_object *obj)
 {
 	int ret = 0;
 
+	// Fast path if pinned
+	if (likely(atomic_read(&obj->pages_pin_count) > 0)) {
+		atomic_inc(&obj->pages_pin_count);
+		return 0;
+	}
+	// Slow path
 	mutex_lock(&obj->pages_lock);
-	if (obj->pages_pin_count++ == 0) {
+	if (atomic_inc_return(&obj->pages_pin_count) == 1) {
 		ret = evdi_gem_get_pages(obj, GFP_KERNEL);
 		if (ret)
-			obj->pages_pin_count--;
+			atomic_dec(&obj->pages_pin_count);
 	}
 	mutex_unlock(&obj->pages_lock);
 	return ret;
@@ -301,10 +307,14 @@ static int evdi_pin_pages(struct evdi_gem_object *obj)
 
 static void evdi_unpin_pages(struct evdi_gem_object *obj)
 {
-	mutex_lock(&obj->pages_lock);
-	if (--obj->pages_pin_count == 0)
-		evdi_gem_put_pages(obj);
-	mutex_unlock(&obj->pages_lock);
+	int newcnt = atomic_dec_return(&obj->pages_pin_count);
+	if (unlikely(newcnt == 0)) {
+		mutex_lock(&obj->pages_lock);
+		if (atomic_read(&obj->pages_pin_count) == 0)
+			evdi_gem_put_pages(obj);
+
+		mutex_unlock(&obj->pages_lock);
+	}
 }
 
 int evdi_gem_vmap(struct evdi_gem_object *obj)
