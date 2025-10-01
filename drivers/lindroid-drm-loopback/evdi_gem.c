@@ -456,7 +456,6 @@ evdi_prime_import_sg_table(struct drm_device *dev,
 			   struct sg_table *sg)
 {
 	struct evdi_gem_object *obj;
-	int npages;
 
 	EVDI_INFO("evdi_prime_import_sg_table");
 	print_dma_buf_owner(attach->dmabuf);
@@ -465,19 +464,6 @@ evdi_prime_import_sg_table(struct drm_device *dev,
 	if (IS_ERR(obj))
 		return ERR_CAST(obj);
 
-	npages = DIV_ROUND_UP(attach->dmabuf->size, PAGE_SIZE);
-	DRM_DEBUG_PRIME("Importing %d pages\n", npages);
-	obj->pages = kvmalloc_array(npages, sizeof(struct page *), GFP_KERNEL);
-	if (!obj->pages) {
-		evdi_gem_free_object(&obj->base);
-		return ERR_PTR(-ENOMEM);
-	}
-
-#if KERNEL_VERSION(5, 12, 0) <= LINUX_VERSION_CODE || defined(EL8)
-	drm_prime_sg_to_page_array(sg, obj->pages, npages);
-#else
-	drm_prime_sg_to_page_addr_arrays(sg, obj->pages, NULL, npages);
-#endif
 	obj->sg = sg;
 	return &obj->base;
 }
@@ -498,9 +484,49 @@ static void evdi_prime_unpin(struct drm_gem_object *obj)
 }
 #endif
 
+#if KERNEL_VERSION(5, 16, 0) > LINUX_VERSION_CODE && !defined(EL8) && !defined(EL9)
+static struct sg_table *evdi_dup_sg_table(const struct sg_table *src)
+{
+	struct sg_table *dst;
+	struct scatterlist *s, *d;
+	int i, nents;
+
+	if (!src || !src->sgl)
+		return ERR_PTR(-EINVAL);
+
+	dst = kzalloc(sizeof(*dst), GFP_KERNEL);
+	if (!dst)
+		return ERR_PTR(-ENOMEM);
+
+	nents = src->nents;
+	if (sg_alloc_table(dst, nents, GFP_KERNEL)) {
+		kfree(dst);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	s = src->sgl;
+	d = dst->sgl;
+	for (i = 0; i < nents; i++, s = sg_next(s), d = sg_next(d)) {
+		struct page *page = sg_page(s);
+		unsigned int len = s->length;
+		unsigned int off = 0;
+		sg_set_page(d, page, len, s->offset);
+	}
+	return dst;
+}
+#endif //KVER < 5.16
+
 struct sg_table *evdi_prime_get_sg_table(struct drm_gem_object *obj)
 {
 	struct evdi_gem_object *bo = to_evdi_bo(obj);
+
+	if (bo->sg) {
+#if KERNEL_VERSION(5, 16, 0) <= LINUX_VERSION_CODE || defined(EL8) || defined(EL9)
+		return drm_prime_dup_sg_table(bo->sg);
+#else
+		return evdi_dup_sg_table(bo->sg);
+#endif
+	}
 
 #if KERNEL_VERSION(5, 10, 0) <= LINUX_VERSION_CODE || defined(EL8)
 	return drm_prime_pages_to_sg(obj->dev, bo->pages, bo->base.size >> PAGE_SHIFT);
