@@ -232,7 +232,11 @@ int evdi_gem_fault(struct vm_fault *vmf)
 		return VM_FAULT_SIGBUS;
 
 	page = obj->pages[page_offset];
+#if KERNEL_VERSION(4, 17, 0) <= LINUX_VERSION_CODE
+	ret = vmf_insert_page(vma, vmf->address, page);
+#else
 	ret = vm_insert_page(vma, vmf->address, page);
+#endif
 	switch (ret) {
 	case -EAGAIN:
 	case 0:
