@@ -199,10 +199,10 @@ int evdi_drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 
 /* Some VMA modifier function patches present in 6.3 were reverted in EL kernels */
 #if KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
-	vm_flags_mod(vma, VM_MIXEDMAP, VM_PFNMAP);
+	vm_flags_mod(vma, VM_MIXEDMAP | VM_DONTDUMP | VM_DONTEXPAND | VM_DONTCOPY, VM_PFNMAP);
 #else
 	vma->vm_flags &= ~VM_PFNMAP;
-	vma->vm_flags |= VM_MIXEDMAP;
+	vma->vm_flags |= VM_MIXEDMAP | VM_DONTDUMP | VM_DONTEXPAND | VM_DONTCOPY;
 #endif
 #if KERNEL_VERSION(5, 11, 0) > LINUX_VERSION_CODE
 	vma->vm_ops = &evdi_gem_vm_ops;
